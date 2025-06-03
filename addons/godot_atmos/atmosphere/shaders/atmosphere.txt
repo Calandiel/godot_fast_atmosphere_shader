@@ -89,6 +89,7 @@ void fragment() {
 		vec3 attenuated_color = scatter(
 			param_transmittance_lut,
 			param_sky_view_lut,
+			param_aerial_perspective_lut,
 			CAMERA_POSITION_WORLD,
 			ray_origin + ray_direction * (t0 + epsilon),
 			ray_direction,

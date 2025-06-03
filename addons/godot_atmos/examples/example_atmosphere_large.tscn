@@ -1,0 +1,49 @@
+[gd_scene load_steps=10 format=3 uid="uid://m0dqx4kdw7n2"]
+
+[ext_resource type="Script" uid="uid://b4t81sd5au5xo" path="res://addons/godot_atmos/atmosphere/scripts/atmosphere_node.gd" id="1_u740m"]
+[ext_resource type="Script" uid="uid://dscv0gvan53b1" path="res://addons/godot_atmos/examples/camera.gd" id="2_ichrg"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_u740m"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_gwbny"]
+radius = 6370.0
+height = 12740.0
+radial_segments = 128
+
+[sub_resource type="Gradient" id="Gradient_w0l6p"]
+colors = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_7ubkw"]
+gradient = SubResource("Gradient_w0l6p")
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_vu8o4"]
+panorama = SubResource("GradientTexture1D_7ubkw")
+
+[sub_resource type="Sky" id="Sky_hrv5a"]
+sky_material = SubResource("PanoramaSkyMaterial_vu8o4")
+
+[sub_resource type="Environment" id="Environment_gwbny"]
+background_mode = 2
+sky = SubResource("Sky_hrv5a")
+
+[node name="AtmosphereNode" type="MeshInstance3D"]
+script = ExtResource("1_u740m")
+camera_path = NodePath("Camera3D")
+
+[node name="Obstacle" type="MeshInstance3D" parent="."]
+transform = Transform3D(100, 2.28882e-06, 4.57764e-06, -2.28882e-06, 100, 0, -4.57764e-06, -1.04774e-13, 100, -130.629, 6362.45, 192.436)
+mesh = SubResource("SphereMesh_u740m")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(-0.962758, 8.60773e-08, -0.270365, 0.0989925, 0.930558, -0.352508, 0.25159, -0.366144, -0.895902, 0.64, 6384.31, 0)
+far = 400000.0
+script = ExtResource("2_ichrg")
+
+[node name="PlanetSurface" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_gwbny")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.9443, 0, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_gwbny")

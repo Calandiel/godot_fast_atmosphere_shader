@@ -241,9 +241,11 @@ func _initialize_compute_resources() -> void:
 # This function is called whenever shader properties change and we need to run everything from scratch again...
 func reset_shader():
 	if shader_loaded:
+		set_shader_uniforms(atmos_shader_mat)
 		RenderingServer.call_on_render_thread(update_transmittance_lut)
 
 func update_transmittance_lut():
+	print('updating transmittance lut...')
 	transmittance_lut_compute_shader.render_process(
 		rendering_device,
 		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
