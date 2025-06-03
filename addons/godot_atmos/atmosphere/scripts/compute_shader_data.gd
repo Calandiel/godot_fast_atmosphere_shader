@@ -24,6 +24,9 @@ const aerial_perspective_lut_shader_file_path = "addons/godot_atmos/atmosphere/s
 const sky_view_lut_shader_file_path = "addons/godot_atmos/atmosphere/shaders/sky_view.txt"
 
 func render_process(rendering_device: RenderingDevice, camera_height, angle, width, height, depth):
+	if rendering_device == null:
+		printerr('received a null rendering device!')
+		return
 	var compute_list := rendering_device.compute_list_begin()
 	rendering_device.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rendering_device.compute_list_bind_uniform_set(compute_list, uniform_set, 0)

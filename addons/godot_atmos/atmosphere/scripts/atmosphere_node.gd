@@ -45,6 +45,7 @@ extends MeshInstance3D
 # @export var mie_scale_height: float = 0.2 * (6370 / 3396);
 
 # Variables
+var atmosphere_post_process_plane: MeshInstance3D
 var atmos_shader_mat: ShaderMaterial;
 var _camera: Camera3D
 var camera: Camera3D:
@@ -73,7 +74,7 @@ var sky_view_lut_compute_shader: ComputeShaderData
 var aerial_perspective_compute_shader: ComputeShaderData
 var shader_loaded = false
 
-func _ready() -> void:
+func _enter_tree() -> void:
 	if camera_path == null or !has_node(camera_path):
 		printerr("Atmosphere needs a valid camera reference to render to!")
 		return
@@ -88,7 +89,7 @@ func _ready() -> void:
 	mesh.size = Vector2(2, 2)
 	mesh.flip_faces = true
 
-	var atmosphere_post_process_plane: MeshInstance3D = MeshInstance3D.new()
+	atmosphere_post_process_plane = MeshInstance3D.new()
 	atmosphere_post_process_plane.name = "AtmospherePostProcessPlane"
 	atmosphere_post_process_plane.mesh = mesh
 	atmosphere_post_process_plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -108,6 +109,8 @@ func _ready() -> void:
 	RenderingServer.call_on_render_thread(_initialize_compute_resources)
 
 func _exit_tree() -> void:
+	print('>>> exit tree')
+	atmosphere_post_process_plane.queue_free()
 	RenderingServer.call_on_render_thread(_free_compute_resources)
 
 func _process(_dt: float) -> void:
@@ -174,6 +177,10 @@ func set_shader_uniforms(atmos_shader_mat: ShaderMaterial):
 ###############################################
 
 func _render_process() -> void:
+	print('>>> render process')
+	if rendering_device == null:
+		printerr('Rendering device on an atmosphere node is null!')
+		return
 	sky_view_lut_compute_shader.render_process(
 		rendering_device,
 		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
@@ -186,6 +193,8 @@ func _render_process() -> void:
 		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
 		aerial_perspective_lut_width, aerial_perspective_lut_height, aerial_perspective_lut_depth
 	)
+	print('render process >>>')
+
 
 func _free_compute_resources() -> void:
 	print('>> free: sky view shader')
@@ -195,6 +204,7 @@ func _free_compute_resources() -> void:
 	print('>> free: transmittance shader')
 	transmittance_lut_compute_shader.clear_rids(rendering_device)
 	rendering_device = null
+	print('free >>')
 
 func _initialize_compute_resources() -> void:
 	rendering_device = RenderingServer.get_rendering_device()
@@ -245,10 +255,11 @@ func reset_shader():
 		RenderingServer.call_on_render_thread(update_transmittance_lut)
 
 func update_transmittance_lut():
-	print('updating transmittance lut...')
+	print('>>> updating transmittance lut...')
 	transmittance_lut_compute_shader.render_process(
 		rendering_device,
 		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
 		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
 		transmittance_lut_width, transmittance_lut_height, 1
 	)
+	print('updated transmittance lut >>>')

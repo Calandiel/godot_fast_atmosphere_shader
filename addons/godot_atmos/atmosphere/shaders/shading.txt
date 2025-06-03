@@ -436,7 +436,6 @@ vec3 scatter(
 		
 	if (
 		//false &&
-		!wrote_depth &&
 		original_camera_distance_from_planet < atmosphere_radius
 	) {
 		// We're in the atmosphere, that means we can use LUTs!
@@ -445,10 +444,13 @@ vec3 scatter(
 		float nu = dot(ray_direction, sun_direction);
 
 		vec3 final_sky_color;
-		if(!wrote_depth) {
-			final_sky_color = texture(sky_view_lut, vec2(mu * 0.5 + 0.5, nu * 0.5 + 0.5)).rgb * sun_intensity;
+		if(wrote_depth) {
+			// Depth was written, use the aerial perspective lut
+			float d = clamp(ray_length / (atmosphere_radius - planet_radius), 0.0, 1.0);
+			final_sky_color = texture(aerial_perspective_lut, vec3(mu * 0.5 + 0.5, nu * 0.5 + 0.5, d)).rgb * sun_intensity;
 		} else {
-			//final_sky_color = texture(aerial_perspective_lut, vec3(mu * 0.5 + 0.5, nu * 0.5 + 0.5, 0.0)).rgb * sun_intensity;
+			// Depth wasn't written, use the sky view lut
+			final_sky_color = texture(sky_view_lut, vec2(mu * 0.5 + 0.5, nu * 0.5 + 0.5)).rgb * sun_intensity;
 		}
 
 		// Modify the background color when rendering the background skybox, so that we can fully mask the stars while near the surface
@@ -499,7 +501,6 @@ vec3 scatter(
 			// Modify the background color when rendering the background skybox, so that we can fully mask the stars while near the surface
 			float magnitude = clamp(1.0 - 10.0 * length(final_sky_color), 0.0, 1.0);
 			vec3 final_background = magnitude * background_color;
-			//return final_background * exp(-scattering_beta_r * total_optical_depth_rayleigh - scattering_beta_m / 0.9 * total_optical_depth_mie) + final_sky_color;
 			return final_background * background_attenuation + final_sky_color;
 		}
 	}
