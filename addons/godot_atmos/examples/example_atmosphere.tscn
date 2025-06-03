@@ -6,6 +6,7 @@
 [sub_resource type="SphereMesh" id="SphereMesh_gwbny"]
 radius = 6.37
 height = 12.74
+radial_segments = 128
 
 [sub_resource type="Gradient" id="Gradient_w0l6p"]
 colors = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 1)
@@ -34,7 +35,7 @@ mie_scattering = Vector3(4, 4, 4)
 mie_scale_height = 0.001
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(-0.962758, 0, -0.270365, 0, 1, 0, 0.270365, 0, -0.962758, 0.222023, 7.20399, -0.16203)
+transform = Transform3D(-0.962758, 0, -0.270365, 0.0989925, 0.930558, -0.352508, 0.25159, -0.366144, -0.895902, 0.639539, 6.34644, -0.16203)
 script = ExtResource("2_vu8o4")
 
 [node name="PlanetSurface" type="MeshInstance3D" parent="."]

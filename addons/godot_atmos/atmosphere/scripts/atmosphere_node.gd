@@ -1,18 +1,40 @@
+@tool
 class_name AtmosphereNode
 extends MeshInstance3D
 
 # Exports
 @export var camera_path: NodePath;
 
-@export var sun_direction = Vector3(0, 0, 1);
+@export var sun_direction = Vector3(0, 0, 1):
+	set(new_value):
+		sun_direction = new_value
+		reset_shader()
 
 # EARTH
-@export var planet_radius = 6370.0;
-@export var atmosphere_height = 80.0;
-@export_custom(PROPERTY_HINT_RANGE, "0,1,0.000001,or_greater,or_less") var rayleigh_scattering: Vector3 = Vector3(0.0058, 0.0135, 0.0331);
-@export var rayleigh_scale_height: float = 8.0;
-@export_custom(PROPERTY_HINT_RANGE, "0,1,0.000001,or_greater,or_less") var mie_scattering: Vector3 = Vector3(0.004, 0.004, 0.004);
-@export var mie_scale_height: float = 1.2;
+@export var planet_radius = 6370.0:
+	set(new_value):
+		planet_radius = new_value
+		reset_shader()
+@export var atmosphere_height = 80.0:
+	set(new_value):
+		atmosphere_height = new_value
+		reset_shader()
+@export_custom(PROPERTY_HINT_RANGE, "0,1,0.000001,or_greater,or_less") var rayleigh_scattering: Vector3 = Vector3(0.0058, 0.0135, 0.0331):
+	set(new_value):
+		rayleigh_scattering = new_value
+		reset_shader()
+@export var rayleigh_scale_height: float = 8.0:
+	set(new_value):
+		rayleigh_scale_height = new_value
+		reset_shader()
+@export_custom(PROPERTY_HINT_RANGE, "0,1,0.000001,or_greater,or_less") var mie_scattering: Vector3 = Vector3(0.004, 0.004, 0.004):
+	set(new_value):
+		mie_scattering = new_value
+		reset_shader()
+@export var mie_scale_height: float = 1.2:
+	set(new_value):
+		mie_scale_height = new_value
+		reset_shader()
 
 # MARS (leaving it here for now for easier access)
 # @export var planet_radius = 6370.0;
@@ -24,7 +46,15 @@ extends MeshInstance3D
 
 # Variables
 var atmos_shader_mat: ShaderMaterial;
-var camera: Camera3D
+var _camera: Camera3D
+var camera: Camera3D:
+	set(new_value):
+		_camera = new_value
+	get:
+		if Engine.is_editor_hint():
+			return EditorInterface.get_editor_viewport_3d().get_camera_3d()
+		else:
+			return _camera
 
 # Lookup texture2d configuration
 var transmittance_lut_width = 256 # 256
@@ -35,11 +65,13 @@ var aerial_perspective_lut_width = 64
 var aerial_perspective_lut_height = 32
 var aerial_perspective_lut_depth = 16
 
+
 # Shader related variab;es
 var rendering_device: RenderingDevice
 var transmittance_lut_compute_shader: ComputeShaderData
 var sky_view_lut_compute_shader: ComputeShaderData
 var aerial_perspective_compute_shader: ComputeShaderData
+var shader_loaded = false
 
 func _ready() -> void:
 	if camera_path == null or !has_node(camera_path):
@@ -73,7 +105,7 @@ func _ready() -> void:
 	atmos_shader_mat.shader = shader
 	set_shader_uniforms(atmos_shader_mat)
 
-	RenderingServer.call_on_render_thread(_initialize_compute_resources.bind())
+	RenderingServer.call_on_render_thread(_initialize_compute_resources)
 
 func _exit_tree() -> void:
 	RenderingServer.call_on_render_thread(_free_compute_resources)
@@ -89,7 +121,7 @@ func _process(_dt: float) -> void:
 		sky_view_lut_compute_shader.process()
 	if aerial_perspective_compute_shader:
 		aerial_perspective_compute_shader.process()
-	RenderingServer.call_on_render_thread(_render_process.bind())
+	RenderingServer.call_on_render_thread(_render_process)
 
 func read_text_file(path: String):
 	var file = FileAccess.open(path, FileAccess.READ)
@@ -178,12 +210,7 @@ func _initialize_compute_resources() -> void:
 		transmittance_lut_width, transmittance_lut_height, 1
 	)
 	# Run the transmittance shader ONCE - this is important, it's NOT redrawn every frame...
-	transmittance_lut_compute_shader.render_process(
-		rendering_device,
-		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
-		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
-		transmittance_lut_width, transmittance_lut_height, 1
-	)
+	update_transmittance_lut()
 	atmos_shader_mat.set_shader_parameter("param_transmittance_lut", transmittance_lut_compute_shader.output_texture_rd)
 
 	print('>>> sky view lut creation')
@@ -208,4 +235,18 @@ func _initialize_compute_resources() -> void:
 	)
 	atmos_shader_mat.set_shader_parameter("param_aerial_perspective_lut", aerial_perspective_compute_shader.output_texture_rd)
 
+	shader_loaded = true
 	print('>>> all luts created!')
+
+# This function is called whenever shader properties change and we need to run everything from scratch again...
+func reset_shader():
+	if shader_loaded:
+		RenderingServer.call_on_render_thread(update_transmittance_lut)
+
+func update_transmittance_lut():
+	transmittance_lut_compute_shader.render_process(
+		rendering_device,
+		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
+		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
+		transmittance_lut_width, transmittance_lut_height, 1
+	)
