@@ -1,0 +1,498 @@
+const float SAMPLES_MAIN_RAY = 70.0;
+const float SAMPLES_INSCATTER_RAY = 4.0;
+
+float safe_sqrt(float f) {
+	return sqrt(max(0.0, f));
+}
+
+/// Given 4d coords and 4d dimensions, returns 2d coords of the texture.
+ivec2 sample_4d_to_2d(ivec4 coords, ivec4 dimensions) {
+	return ivec2(
+		coords.x + dimensions.x * coords.z,
+		coords.y + dimensions.y * coords.w
+	);
+}
+
+
+/// Given 2d coords and 4d dimensions, returns "virtual" 4d coords of the texture.
+ivec4 sample_2d_to_4d(ivec2 coords, ivec4 dimensions) {
+	return ivec4(
+		coords.x % dimensions.x,
+		coords.y % dimensions.y,
+		(coords.x - (coords.x % dimensions.x)) / dimensions.x,
+		(coords.y - (coords.y % dimensions.y)) / dimensions.y
+	);
+}
+
+bool intersect_sphere(
+	// Ray
+	in vec3 ray_origin,
+	in vec3 ray_direction,
+	// Sphere
+	in vec3 sphere_center,
+	in float sphere_radius,
+	// Outputs
+	out float t0,
+	out float t1
+) {
+	t0 = 0.0;
+	t1 = 0.0;
+
+	vec3 l = ray_origin - sphere_center;
+	float tca = dot(l, ray_direction);
+	float c = dot(l, l) - sphere_radius * sphere_radius;
+
+	// Exit if ray is outside the sphere and pointing away from it
+	if (c > 0.0 && tca > 0.0) {
+		return false;
+	}
+
+	float  discr = tca * tca - c;
+
+	// A negative discriminant corresponds to ray missing sphere
+	if (discr < 0.0) {
+		return false;
+	}
+
+	// Ray now found to intersect sphere, compute smallest t value of intersection
+	float t = -tca - sqrt(discr);
+
+	// If t is negative, ray started inside sphere so clamp t to zero
+	if (t < 0.0) {
+		t = 0.0;
+	}
+
+	t0 = t;
+	t1 = -tca + sqrt(discr);
+
+	return true;
+}
+
+bool intersect_planet_with_atmosphere(
+	// Ray
+	vec3 ray_origin,
+	vec3 ray_direction,
+	// Sphere
+	vec3 planet_center,
+	float planet_radius,
+	float atmosphere_radius,
+	// Outputs
+	out float first_intersection_time,
+	out float second_intersection_time
+) {
+
+	float atmosphere_entry_time = 0.0; // Atmosphere entry point (worldPos + V * tA)
+	float atmosphere_exit_time = 0.0; // Atmosphere exit point  (worldPos + V * tB)
+	if (!intersect_sphere(
+		ray_origin,
+		ray_direction,
+		planet_center,
+		atmosphere_radius,
+		atmosphere_entry_time,
+		atmosphere_exit_time
+	)) {
+		// The ray doesn't hit the atmosphere
+		return false;
+	}
+
+	// Check for intersections with the ground
+	float planet_entry_time = 0.0;
+	float planet_exit_time = 0.0;
+	if (intersect_sphere(
+		ray_origin,
+		ray_direction,
+		planet_center,
+		planet_radius,
+		planet_entry_time,
+		planet_exit_time
+	)) {
+		// We hit the ground -> we must adjust the exit time as rocks aren't exactly air
+		atmosphere_exit_time = planet_entry_time;
+	}
+
+	first_intersection_time = atmosphere_entry_time;
+	second_intersection_time = atmosphere_exit_time;
+
+	return true;
+}
+
+// Calculate density (for optical length) for a point
+float get_density(
+	vec3 point,
+	vec3 planet_center,
+	float planet_radius,
+	float scale_height
+) {
+	float height = max(0.0, length(point - planet_center) - planet_radius);
+	return exp(-height / scale_height);
+}
+
+//
+// Calculate density integral for optical depth for a given ray.
+// Perform `steps` steps of integration
+float depth_integral_raw(
+	vec3 ray_origin,
+	vec3 ray_direction,
+	float ray_length,
+	// Planet properties
+	vec3 planet_center,
+	float planet_radius,
+	float scale_height
+) {
+	// Accumulator
+	float depth = 0.0;
+
+	float dx = ray_length / SAMPLES_INSCATTER_RAY;
+	for (float i = 0.0; i < SAMPLES_INSCATTER_RAY; i++) {
+		// Simply accumulate densities
+		// Offset by 0.5 so that we get samples in the middle of each "segment"
+		depth += get_density(ray_origin + ray_direction * dx * (i + 0.5), planet_center, planet_radius, scale_height);
+	}
+
+	return depth * dx; // this is weird...? Maybe not, I've seen other implementations do it too... Oh, I guess its applying it at the end instead of inside the loop. That works.
+}
+
+// Perform `steps` steps of integration
+float depth_integral_2d(
+	float height,
+	float cos_of_view_zenith_angle,
+	// Planet properties
+	float planet_radius,
+	float atmosphere_radius,
+	float scale_height
+) {
+	float alt = height + planet_radius;
+	float mu = cos_of_view_zenith_angle;
+
+	float smu = safe_sqrt(1.0 - mu * mu); // cos^2 + sin^2 = 1
+	vec3 ray_origin = vec3(0.0, alt, 0.0);
+	vec3 ray_direction = vec3(0.0, mu, smu);
+
+	float t0;
+	float t1;
+	intersect_sphere(
+		ray_origin,
+		ray_direction,
+		vec3(0.0, 0.0, 0.0),
+		atmosphere_radius,
+		t0, t1
+	);
+	float ray_length = t1 - t0;
+	// ray_length = 5.0;
+
+	return depth_integral_raw(
+		ray_origin,
+		ray_direction,
+		ray_length,
+		vec3(0.0, 0.0, 0.0),
+		planet_radius,
+		scale_height
+	);
+}
+
+vec3 sample_extinction_along_a_ray(
+	float height, float cos_of_view_zenith_angle,
+	float planet_radius, float atmosphere_radius,
+	float rayleigh_scale_height, float mie_scale_height,
+	vec3 scattering_r, vec3 scattering_m
+) {
+	float depth_integral_rayleigh = depth_integral_2d(
+		height,
+		cos_of_view_zenith_angle,
+		planet_radius,
+		atmosphere_radius,
+		rayleigh_scale_height
+	);
+	float depth_integral_mie = depth_integral_2d(
+		height,
+		cos_of_view_zenith_angle,
+		planet_radius,
+		atmosphere_radius,
+		mie_scale_height
+	);
+
+	// TODO: use "mie_extinction or something instead. This only works for Earth...
+	return depth_integral_rayleigh * scattering_r + depth_integral_mie * scattering_m / 0.9;
+}
+
+void get_ray_parameters_from_angles(
+	// mu
+	float cos_of_view_zenith_angle, // <-- "input"
+	// mus
+	float cos_of_sun_zenith_angle, // <-- "input"
+	// nu
+	float cos_of_view_sun_angle, // <-- "input"
+	float height, // <-- "input"
+	// atmosphere config
+	vec3 planet_center,
+	float planet_radius,
+	float atmosphere_radius,
+	// config
+	float maximum_ray_length, // <-- "input"
+	// outputs
+	out vec3 out_sun_direction,
+	out vec3 out_ray_origin,
+	out vec3 out_ray_direction,
+	out float out_ray_length
+){
+	float alt = height + planet_radius;
+	vec3 zenith = vec3(0.0, 0.0, 1.0); // OA
+	vec3 ray_origin = zenith * alt + planet_center;
+	float s = safe_sqrt(1.0 - cos_of_view_zenith_angle * cos_of_view_zenith_angle);
+	vec3 ray_direction = vec3(s, 0.0, cos_of_view_zenith_angle); // OB
+	// Spherical law of cosines bonanza:
+	// https://en.wikipedia.org/wiki/Spherical_trigonometry#Derivation_of_the_cosine_rule
+	float cos_c = cos_of_view_zenith_angle;
+	float cos_b = cos_of_sun_zenith_angle;
+	float cos_a = cos_of_view_sun_angle;
+	float sin_c = s;
+	float sin_b = safe_sqrt(1.0 - cos_b * cos_b);
+	float sin_a = safe_sqrt(1.0 - cos_a * cos_a);
+	float cos_A = (cos_a - cos_b * cos_c) / (sin_b * sin_c);
+	float sin_A = safe_sqrt(1.0 - cos_A * cos_A);
+	vec3 sun_direction = normalize(vec3(sin_b * cos_A, sin_b * sin_A, cos_b)); // OC
+
+
+	float t0 = 0.0;
+	float t1 = 0.0;
+	intersect_planet_with_atmosphere(
+		ray_origin,
+		ray_direction,
+		planet_center,
+		planet_radius,
+		atmosphere_radius,
+		t0, t1
+	);
+	float ray_length = t1 - t0;
+	ray_length = min(ray_length, maximum_ray_length);
+
+	out_sun_direction = sun_direction;
+	out_ray_origin = ray_origin;
+	out_ray_direction = ray_direction;
+	out_ray_length = ray_length;
+}
+
+vec3 sun_with_bloom(vec3 rayDir, vec3 sunDir) {
+	const float sunSolidAngle = 0.53*PI/180.0;
+	const float minSunCosTheta = cos(sunSolidAngle);
+
+	float cosTheta = dot(rayDir, sunDir);
+	if (cosTheta >= minSunCosTheta) return vec3(1.0);
+	
+	float offset = minSunCosTheta - cosTheta;
+	float gaussianBloom = exp(-offset*50000.0)*0.5;
+	float invBloom = 1.0/(0.02 + offset*300.0)*0.01;
+	return vec3(gaussianBloom+invBloom);
+}
+
+vec2 get_transmittance_lut_uv(vec3 sun_direction, vec3 point, float point_height, float atmosphere_radius, float planet_radius) {
+	return vec2(dot(sun_direction, normalize(point)) * 0.5 + 0.5, point_height / (atmosphere_radius - planet_radius));
+}
+
+void get_sky_color(
+	out vec3 rayleigh_light_output,
+	out vec3 mie_light_output,
+	out float output_optical_depth_rayleigh,
+	out float output_optical_depth_mie,
+	sampler2D transmittance_lut,
+	vec3 ray_origin,
+	vec3 ray_direction,
+	float ray_length,
+	vec3 sun_direction,
+	vec3 planet_center,
+	float planet_radius,
+	float atmosphere_radius,
+	float rayleigh_scale_height,
+	vec3 scattering_beta_r,
+	float mie_scale_height,
+	vec3 scattering_beta_m
+) {
+	float dx = ray_length / SAMPLES_MAIN_RAY;
+	float total_optical_depth_rayleigh = 0.0;
+	float total_optical_depth_mie = 0.0;
+	vec3 total_light_rayleigh = vec3(0.0);
+	vec3 total_light_mie = vec3(0.0);
+	for(float i = 0.0; i < SAMPLES_MAIN_RAY; i++) {
+		// Current point along the ray
+		vec3 point = (ray_origin - planet_center) + ray_direction * (i + 0.5) * dx;
+
+		// Height of the point above the planets surface
+		float point_height = length(point) - planet_radius;
+
+		float density_rayleigh = exp(-point_height / rayleigh_scale_height) * dx;
+		float density_mie = exp(-point_height / mie_scale_height) * dx;
+
+		total_optical_depth_rayleigh += density_rayleigh;
+		total_optical_depth_mie += density_mie;
+
+		// Calculate the length for the scattering ray (that points towards the sun from the current point)
+		float t0;
+		float t1;
+		bool hit = intersect_sphere(
+			point,
+			sun_direction,
+			vec3(0.0, 0.0, 0.0),
+			atmosphere_radius,
+			t0, t1
+		);
+		float t0_;
+		float t1_;
+		if (intersect_sphere(point, sun_direction, vec3(0.0, 0.0, 0.0), planet_radius, t0_, t1_)) {
+			// The "secondary" ray hit planet surface, nothing to do
+		} else {
+			// The secondary ray has a path towards the sun, accumulate light
+			float light_ray_length = max(t1 - t0, 0.0);
+			float light_ray_dx = light_ray_length / SAMPLES_INSCATTER_RAY;
+
+			// "How much light reaches the point due to scattering"
+			// e^(-(s_r * (o_r + l_r) + s_m * (o_m + l_m)))
+			// e^(-(s_r * o_r + s_m * o_m)) * e^(-(s_r * l_r + s_m * l_m))
+			// e^(-(s_r * o_r + s_m * o_m)) * <transmittance to sun pulled from the transmittance lu
+
+			// mu -> -1 to 1 -> 0 to 1 -> x
+			vec2 transmittance_uv = get_transmittance_lut_uv(sun_direction, point, point_height, atmosphere_radius, planet_radius);
+			vec3 attenuation = exp(-(
+				scattering_beta_r * total_optical_depth_rayleigh +
+				scattering_beta_m * total_optical_depth_mie)
+			) * texture(transmittance_lut, transmittance_uv).rgb;
+
+			total_light_rayleigh += density_rayleigh * attenuation;
+			total_light_mie += density_mie * attenuation;
+		}
+	}
+
+	rayleigh_light_output = scattering_beta_r * total_light_rayleigh;
+	mie_light_output = scattering_beta_m * total_light_mie;
+	output_optical_depth_rayleigh = total_optical_depth_rayleigh;
+	output_optical_depth_mie = total_optical_depth_mie;
+}
+
+vec2 get_phases(vec3 ray_direction, vec3 sun_direction) {
+	float g = 0.8;
+	float smu = dot(ray_direction, sun_direction);
+	float smumu = smu * smu;
+	float gg = g * g;
+	float phase_rayleigh = 3.0 / (50.2654824574 /* (16 * pi) */) * (1.0 + smumu);
+	float phase_mie = 3.0 / (25.1327412287 /* (8 * pi) */) * ((1.0 - gg) * (smumu + 1.0)) / (pow(1.0 + gg - 2.0 * smu * g, 1.5) * (2.0 + gg));
+
+	return vec2(phase_rayleigh, phase_mie);
+}
+
+// Final scattering function
+vec3 scatter(
+	// luts
+	sampler2D transmittance_lut,
+	sampler2D sky_view_lut,
+
+	//
+	vec3 camera_position,
+	vec3 ray_origin,
+	vec3 ray_direction,
+	float ray_length,
+	vec3 background_color,
+	float sun_intensity,
+	vec3 sun_direction,
+
+	// Atmosphere config
+	vec3 planet_center,
+	float planet_radius,
+	float atmosphere_radius,
+	float rayleigh_scale_height,
+	vec3 scattering_beta_r,
+	float mie_scale_height,
+	vec3 scattering_beta_m,
+
+	//
+	float original_camera_distance_from_planet,
+	bool wrote_depth
+) {
+	// the normal pointing in the zenith direction
+	//vec3 zenith = normalize(ray_origin - planet_center);
+
+	// # The following 4 values are used in Brunetons precomputed atmospheric scattering paper for the 4D LUT
+	// view-zenith angle
+	//float mu = dot(ray_direction, zenith);
+	// sun-zenith angle
+	//float mus = dot(sun_direction, zenith);
+	// view-sun angle
+	//float nu = dot(ray_direction, sun_direction);
+	// height above the surface
+	float ray_origin_radius = length(ray_origin - planet_center);
+	float height = ray_origin_radius - planet_radius;
+	//float h = clamp(0.0, 1.0, height / (atmosphere_radius - planet_radius));
+	
+	// TODO: THERES A PROBLEM HERE!
+	// When looking at objects in the atmosphere from outside the atmosphere
+	// it will WAY overestimate the amount of light that gets deleted,
+	// because the ray will be too long for a given ray length...
+	// TODO: seems to be fine now, double check later
+	vec2 transmittance_uv = get_transmittance_lut_uv(ray_direction, ray_origin, height, atmosphere_radius, planet_radius);
+	float epsilon = 0.00001;
+	if (ray_length > epsilon) {
+		transmittance_uv /= get_transmittance_lut_uv(ray_direction, ray_origin + ray_origin * ray_length, height, atmosphere_radius, planet_radius);
+	}
+	vec3 background_attenuation = texture(transmittance_lut, transmittance_uv).rgb;
+		
+	if (
+		//false &&
+		!wrote_depth && original_camera_distance_from_planet < atmosphere_radius
+	) {
+		// We're in the atmosphere, that means we can use LUTs!
+		vec3 zenith = normalize(ray_origin - planet_center);
+		float mu = dot(ray_direction, zenith);
+		float nu = dot(ray_direction, sun_direction);
+		vec3 final_sky_color = texture(sky_view_lut, vec2(mu * 0.5 + 0.5, nu * 0.5 + 0.5)).rgb * sun_intensity;
+
+		// Modify the background color when rendering the background skybox, so that we can fully mask the stars while near the surface
+		float magnitude = clamp(1.0 - 10.0 * length(final_sky_color), 0.0, 1.0);
+		vec3 final_background = magnitude * background_color;
+		return final_background * background_attenuation + final_sky_color;
+	} else {
+		// We're outside of the atmosphere, fall back on slower, direct calculations!
+		vec3 total_light_rayleigh = vec3(0.0, 0.0, 0.0);
+		vec3 total_light_mie = vec3(0.0, 0.0, 0.0);
+		float total_optical_depth_rayleigh = 0.0;
+		float total_optical_depth_mie = 0.0;
+
+		get_sky_color(
+			total_light_rayleigh,
+			total_light_mie,
+			total_optical_depth_rayleigh,
+			total_optical_depth_mie,
+			transmittance_lut,
+			ray_origin,
+			ray_direction,
+			ray_length,
+			sun_direction,
+			planet_center,
+			planet_radius,
+			atmosphere_radius,
+			rayleigh_scale_height,
+			scattering_beta_r,
+			mie_scale_height,
+			scattering_beta_m
+		);
+
+		vec2 phases = get_phases(ray_direction, sun_direction);
+		float phase_rayleigh = phases.x;
+		float phase_mie = phases.y;
+
+		if (wrote_depth) {
+			// Skip mie scattering when depth is written so that we dont have a large plume of light where the sun is behind the depth writing object
+			vec3 final_sky_color = vec3(
+				phase_rayleigh * total_light_rayleigh
+			) * sun_intensity;
+			return background_color * background_attenuation + final_sky_color;
+		} else {
+			vec3 final_sky_color = vec3(
+				phase_rayleigh * total_light_rayleigh
+				+ phase_mie * total_light_mie
+			) * sun_intensity;
+			// Modify the background color when rendering the background skybox, so that we can fully mask the stars while near the surface
+			float magnitude = clamp(1.0 - 10.0 * length(final_sky_color), 0.0, 1.0);
+			vec3 final_background = magnitude * background_color;
+			//return final_background * exp(-scattering_beta_r * total_optical_depth_rayleigh - scattering_beta_m / 0.9 * total_optical_depth_mie) + final_sky_color;
+			return final_background * background_attenuation + final_sky_color;
+		}
+	}
+}

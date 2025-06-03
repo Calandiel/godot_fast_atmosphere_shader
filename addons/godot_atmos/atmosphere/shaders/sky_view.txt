@@ -1,0 +1,90 @@
+#version 450
+
+// INCLUDES
+
+#include common.glsl
+
+#include shading.glsl
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D OUTPUT_TEXTURE;
+
+#include uniforms.glsl
+
+#include uniform_transmittance.glsl
+
+void main() {
+	ivec2 uv = ivec2(
+		int(gl_GlobalInvocationID.x),
+		int(gl_GlobalInvocationID.y)
+	);
+	ivec4 dim = ivec4(
+		int(INPUT_DATA_BUFFER.target_dimensions.x),
+		int(INPUT_DATA_BUFFER.target_dimensions.y),
+		int(INPUT_DATA_BUFFER.target_dimensions.z),
+		int(INPUT_DATA_BUFFER.target_dimensions.w)
+	);
+	ivec4 coords = sample_2d_to_4d(uv, dim);
+
+	float mu = (float(coords.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0; // cos_of_view_zenith_angle
+	float nu = (float(coords.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * 2.0 - 1.0; // cos_of_view_sun_angle
+	// mus and height are meant to be inputs
+	float mus = DYNAMIC_DATA_BUFFER.sun_zenith_angle; // cos_of_sun_zenith_angle
+	float height = DYNAMIC_DATA_BUFFER.camera_height;
+	
+	vec3 sun_direction = vec3(0.0);
+	vec3 ray_origin = vec3(0.0);
+	vec3 ray_direction = vec3(0.0);
+	float ray_length = 0.0;
+	get_ray_parameters_from_angles(
+		mu, mus, nu, height,
+		// atmosphere config
+		vec3(0.0), // planet center
+		INPUT_DATA_BUFFER.planet_radius,
+		INPUT_DATA_BUFFER.atmosphere_radius,
+		// config
+		9999999999.0, // maximum ray length
+		// outputs
+		sun_direction,
+		ray_origin,
+		ray_direction,
+		ray_length
+	);
+
+	vec3 total_light_rayleigh = vec3(0.0);
+	vec3 total_light_mie = vec3(0.0);
+	float output_optical_depth_rayleigh = 0.0;
+	float output_optical_depth_mie = 0.0;
+	get_sky_color(
+		total_light_rayleigh,
+		total_light_mie,
+		output_optical_depth_rayleigh,
+		output_optical_depth_mie,
+		TRANSMITTANCE_LUT,
+		ray_origin, // ray origin
+		ray_direction,
+		ray_length,
+		sun_direction,
+		vec3(0.0), // planet center
+		INPUT_DATA_BUFFER.planet_radius,
+		INPUT_DATA_BUFFER.atmosphere_radius,
+		INPUT_DATA_BUFFER.rayleigh_scale_height,
+		INPUT_DATA_BUFFER.rayleigh_scattering,
+		INPUT_DATA_BUFFER.mie_scale_height,
+		INPUT_DATA_BUFFER.mie_scattering
+	);
+
+	vec2 phases = get_phases(ray_direction, sun_direction);
+	float phase_rayleigh = phases.x;
+	float phase_mie = phases.y;
+
+	vec3 sky_color = vec3(
+		phase_rayleigh * total_light_rayleigh
+		+ phase_mie * total_light_mie
+	);
+
+	imageStore(
+		OUTPUT_TEXTURE,
+		ivec2(gl_GlobalInvocationID.xy),
+		vec4(sky_color, 1.0) // <-- what we want
+	);
+}

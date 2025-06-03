@@ -1,0 +1,52 @@
+[gd_scene load_steps=10 format=3 uid="uid://6t2ykdnta4y0"]
+
+[ext_resource type="Script" uid="uid://b4t81sd5au5xo" path="res://addons/godot_atmos/atmosphere/scripts/atmosphere_node.gd" id="1_gwbny"]
+[ext_resource type="Script" uid="uid://dscv0gvan53b1" path="res://addons/godot_atmos/examples/camera.gd" id="2_vu8o4"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_gwbny"]
+radius = 6.37
+height = 12.74
+
+[sub_resource type="Gradient" id="Gradient_vu8o4"]
+offsets = PackedFloat32Array(0.841365, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_hrv5a"]
+frequency = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_w3ld3"]
+color_ramp = SubResource("Gradient_vu8o4")
+noise = SubResource("FastNoiseLite_hrv5a")
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_vu8o4"]
+panorama = SubResource("NoiseTexture2D_w3ld3")
+
+[sub_resource type="Sky" id="Sky_hrv5a"]
+sky_material = SubResource("PanoramaSkyMaterial_vu8o4")
+
+[sub_resource type="Environment" id="Environment_gwbny"]
+background_mode = 2
+sky = SubResource("Sky_hrv5a")
+
+[node name="AtmosphereNode" type="MeshInstance3D"]
+script = ExtResource("1_gwbny")
+camera_path = NodePath("Camera3D")
+planet_radius = 6.37
+atmosphere_height = 0.08
+rayleigh_scattering = Vector3(5.8, 13.5, 33.1)
+rayleigh_scale_height = 0.008
+mie_scattering = Vector3(4, 4, 4)
+mie_scale_height = 0.001
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(-0.962758, 0, -0.270365, 0, 1, 0, 0.270365, 0, -0.962758, 0.222023, 7.20399, -0.16203)
+near = 0.001
+script = ExtResource("2_vu8o4")
+
+[node name="PlanetSurface" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_gwbny")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.14151, 0, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_gwbny")

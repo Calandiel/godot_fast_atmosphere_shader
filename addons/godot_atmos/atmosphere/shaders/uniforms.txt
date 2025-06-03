@@ -1,0 +1,21 @@
+
+// Note: the exact order of these things MATTERS, I presume there could be some padding happening?
+layout(set = 0, binding = 1, std430) restrict buffer InputDataBuffer {
+	// planet
+	float planet_radius;
+	float atmosphere_radius;
+	// config
+	vec2 OUTPUT_TEXTURE_SIZE; // <---- 4 floats
+	vec4 target_dimensions; // <---- 4 floats
+	// rayleigh
+	vec3 rayleigh_scattering;
+	float rayleigh_scale_height; // <---- 4 floats
+	// mie
+	vec3 mie_scattering;
+	float mie_scale_height; // <---- 4 floats
+} INPUT_DATA_BUFFER;
+
+layout(push_constant, std430) uniform DynamicDataBuffer {
+	float camera_height;
+	float sun_zenith_angle;
+} DYNAMIC_DATA_BUFFER;

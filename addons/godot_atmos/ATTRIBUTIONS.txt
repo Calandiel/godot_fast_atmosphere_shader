@@ -1,0 +1,7 @@
+This plugin uses code from the following repositories, under the MIT license:
+- https://github.com/JolifantoBambla/webgpu-sky-atmosphere
+- https://github.com/Dimev/Realistic-Atmosphere-Godot-and-UE4
+
+It also relies on the following papers:
+- Sebastien Hillaire, A Scalable and Production Ready Sky and Atmosphere Rendering Technique
+- Stefan Sperlhofer, Deferred Rendering of Planetary Terrains with Accurate Atmospheres

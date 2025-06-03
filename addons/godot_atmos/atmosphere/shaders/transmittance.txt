@@ -1,0 +1,44 @@
+#version 450
+
+// INCLUDES
+
+#include common.glsl
+
+#include shading.glsl
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D OUTPUT_TEXTURE;
+
+#include uniforms.glsl
+
+void main() {
+	ivec2 uv = ivec2(
+		int(gl_GlobalInvocationID.x),
+		int(gl_GlobalInvocationID.y)
+	);
+	ivec4 dim = ivec4(
+		int(INPUT_DATA_BUFFER.target_dimensions.x),
+		int(INPUT_DATA_BUFFER.target_dimensions.y),
+		int(INPUT_DATA_BUFFER.target_dimensions.z),
+		int(INPUT_DATA_BUFFER.target_dimensions.w)
+	);
+	ivec4 coords = sample_2d_to_4d(uv, dim);
+	float mu = (float(coords.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0;
+	float height = (float(coords.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y);
+	height = height * (INPUT_DATA_BUFFER.atmosphere_radius - INPUT_DATA_BUFFER.planet_radius);
+
+	vec3 color_to_store = exp(-sample_extinction_along_a_ray(
+		height, mu,
+		INPUT_DATA_BUFFER.planet_radius,
+		INPUT_DATA_BUFFER.atmosphere_radius,
+		INPUT_DATA_BUFFER.rayleigh_scale_height,
+		INPUT_DATA_BUFFER.mie_scale_height,
+		INPUT_DATA_BUFFER.rayleigh_scattering,
+		INPUT_DATA_BUFFER.mie_scattering
+	));
+
+	imageStore(
+		OUTPUT_TEXTURE,
+		ivec2(gl_GlobalInvocationID.xy),
+		vec4(color_to_store, 1.0) // <-- what we want
+	);
+}
