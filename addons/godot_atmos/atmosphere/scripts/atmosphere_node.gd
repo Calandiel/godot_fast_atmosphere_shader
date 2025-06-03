@@ -73,8 +73,18 @@ var transmittance_lut_compute_shader: ComputeShaderData
 var sky_view_lut_compute_shader: ComputeShaderData
 var aerial_perspective_compute_shader: ComputeShaderData
 var shader_loaded = false
+var cached_transform: Transform3D
 
-func _enter_tree() -> void:
+func _ready() -> void:
+	cached_transform = global_transform
+
+func _exit_tree() -> void:
+	if not shader_loaded:
+		return
+	atmosphere_post_process_plane.queue_free()
+	RenderingServer.call_on_render_thread(_free_compute_resources)
+
+func load_shader():
 	if camera_path == null or !has_node(camera_path):
 		printerr("Atmosphere needs a valid camera reference to render to!")
 		return
@@ -108,13 +118,14 @@ func _enter_tree() -> void:
 
 	RenderingServer.call_on_render_thread(_initialize_compute_resources)
 
-func _exit_tree() -> void:
-	print('>>> exit tree')
-	atmosphere_post_process_plane.queue_free()
-	RenderingServer.call_on_render_thread(_free_compute_resources)
-
 func _process(_dt: float) -> void:
-	if camera == null:
+	if camera == null or not is_inside_tree():
+		return
+	if not shader_loaded:
+		load_shader()
+	if cached_transform != global_transform:
+		cached_transform = global_transform
+		reset_shader()
 		return
 	handle_shader_reload() # Rendering shader reloading. Can be first, shouldn't matter much where it is.
 
@@ -142,8 +153,6 @@ func handle_shader_reload():
 	var new_last_modified_time = FileAccess.get_modified_time(ComputeShaderData.shader_file_path)
 	var new_last_modified_time_2 = FileAccess.get_modified_time(ComputeShaderData.shading_include_shader_file_path)
 	if new_last_modified_time != last_modified_time || last_modified_time_2 != new_last_modified_time_2:
-		print('reload!')
-		print('times: ', new_last_modified_time, ", ", new_last_modified_time_2)
 		last_modified_time = new_last_modified_time
 		last_modified_time_2 = new_last_modified_time_2
 		reload_shader(atmos_shader_mat.shader)
@@ -177,7 +186,6 @@ func set_shader_uniforms(atmos_shader_mat: ShaderMaterial):
 ###############################################
 
 func _render_process() -> void:
-	print('>>> render process')
 	if rendering_device == null:
 		printerr('Rendering device on an atmosphere node is null!')
 		return
@@ -193,25 +201,20 @@ func _render_process() -> void:
 		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
 		aerial_perspective_lut_width, aerial_perspective_lut_height, aerial_perspective_lut_depth
 	)
-	print('render process >>>')
 
 
 func _free_compute_resources() -> void:
-	print('>> free: sky view shader')
 	sky_view_lut_compute_shader.clear_rids(rendering_device)
-	print('>> free: aerial perspective shader')
 	aerial_perspective_compute_shader.clear_rids(rendering_device)
-	print('>> free: transmittance shader')
 	transmittance_lut_compute_shader.clear_rids(rendering_device)
 	rendering_device = null
-	print('free >>')
+	shader_loaded = false
 
 func _initialize_compute_resources() -> void:
 	rendering_device = RenderingServer.get_rendering_device()
 
 	var config = create_atmospheric_config()
 	# Create and set LUTs
-	print('>>> transmittance lut creation')
 	transmittance_lut_compute_shader = ComputeShaderData.new()
 	transmittance_lut_compute_shader.create_compute_shader_uniforms(
 		rendering_device,
@@ -220,10 +223,14 @@ func _initialize_compute_resources() -> void:
 		transmittance_lut_width, transmittance_lut_height, 1
 	)
 	# Run the transmittance shader ONCE - this is important, it's NOT redrawn every frame...
-	update_transmittance_lut()
+	transmittance_lut_compute_shader.render_process(
+		rendering_device,
+		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
+		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
+		transmittance_lut_width, transmittance_lut_height, 1
+	)
 	atmos_shader_mat.set_shader_parameter("param_transmittance_lut", transmittance_lut_compute_shader.output_texture_rd)
 
-	print('>>> sky view lut creation')
 	sky_view_lut_compute_shader = ComputeShaderData.new()
 	sky_view_lut_compute_shader.create_compute_shader_uniforms(
 		rendering_device,
@@ -234,7 +241,6 @@ func _initialize_compute_resources() -> void:
 	)
 	atmos_shader_mat.set_shader_parameter("param_sky_view_lut", sky_view_lut_compute_shader.output_texture_rd)
 
-	print('>>> aerial perspective lut creation')
 	aerial_perspective_compute_shader = ComputeShaderData.new()
 	aerial_perspective_compute_shader.create_compute_shader_uniforms(
 		rendering_device,
@@ -246,20 +252,9 @@ func _initialize_compute_resources() -> void:
 	atmos_shader_mat.set_shader_parameter("param_aerial_perspective_lut", aerial_perspective_compute_shader.output_texture_rd)
 
 	shader_loaded = true
-	print('>>> all luts created!')
 
 # This function is called whenever shader properties change and we need to run everything from scratch again...
 func reset_shader():
-	if shader_loaded:
-		set_shader_uniforms(atmos_shader_mat)
-		RenderingServer.call_on_render_thread(update_transmittance_lut)
-
-func update_transmittance_lut():
-	print('>>> updating transmittance lut...')
-	transmittance_lut_compute_shader.render_process(
-		rendering_device,
-		(camera.global_position - global_position).length() - planet_radius, # Camera sky_view_lut_height
-		sun_direction.normalized().dot((camera.global_position - global_position).normalized()),
-		transmittance_lut_width, transmittance_lut_height, 1
-	)
-	print('updated transmittance lut >>>')
+	if not shader_loaded or !is_inside_tree():
+		return
+	_exit_tree()

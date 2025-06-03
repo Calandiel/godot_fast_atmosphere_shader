@@ -207,7 +207,7 @@ func create_compute_shader_uniforms(
 	source_code = preprocess_includes(source_code)
 	shader_source.set_stage_source(RenderingDevice.SHADER_STAGE_COMPUTE, source_code)
 	var shader_spirv = rendering_device.shader_compile_spirv_from_source(shader_source)
-	if shader_spirv.compile_error_compute != null:
+	if shader_spirv.compile_error_compute != null and shader_spirv.compile_error_compute != '':
 		printerr('compute shader compile error: ', shader_spirv.compile_error_compute)
 	compute_shader = rendering_device.shader_create_from_spirv(shader_spirv)
 
