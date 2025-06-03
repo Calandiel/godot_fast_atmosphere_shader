@@ -55,23 +55,17 @@ func set_output_texture_rd_rids():
 
 
 func clear_rids(rendering_device: RenderingDevice) -> void:
-	print('free: uniform set')
 	rendering_device.free_rid(uniform_set)
-	print('free: pipeline')
 	rendering_device.free_rid(pipeline)
-	print('free: compute shader')
 	rendering_device.free_rid(compute_shader) # This, apparently, should be last
 	# Free RIDs when leaving the tree...
 	if output_texture_rd is Texture2DRD:
 		output_texture_rd.texture_rd_rid = RID()
 	elif output_texture_rd is Texture3DRD:
 		output_texture_rd.texture_rd_rid = RID()
-	print('free: output_texture')
 	rendering_device.free_rid(output_texture)
-	print('free: storage buffer')
 	rendering_device.free_rid(storage_buffer)
 	if transmittance_lut_sampler != null:
-		print('free: transmittance lut sampler')
 		rendering_device.free_rid(transmittance_lut_sampler)
 
 func read_text_file(path: String):
@@ -132,7 +126,6 @@ func make_compute_sampler_uniform(rendering_device: RenderingDevice, texture: RI
 	}
 
 func make_uniform_from_texture(output_tex: RID, binding: int = 0, ) -> RDUniform:
-	print('making a uniform from texture...')
 	var output_tex_uniform := RDUniform.new()
 	output_tex_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
 	output_tex_uniform.binding = binding
@@ -191,8 +184,6 @@ func create_compute_shader_uniforms(
 	width: int, height: int, depth: int,
 	transmittance_lut: RID = RID(), # Transmittance lut is optional!
 ):
-	print('compute texture dimensions: (', width, ', ', height, ', ', depth, ')')
-
 	var texture_result = make_compute_texture(rendering_device, width, height, depth, 0)
 	var output_texture_uniform = texture_result["uniform"]
 	output_texture = texture_result["texture"]
@@ -215,16 +206,12 @@ func create_compute_shader_uniforms(
 	var source_code = read_text_file(compute_shader_source_code_path)
 	source_code = preprocess_includes(source_code)
 	shader_source.set_stage_source(RenderingDevice.SHADER_STAGE_COMPUTE, source_code)
-	print('compiling spirv from source...')
 	var shader_spirv = rendering_device.shader_compile_spirv_from_source(shader_source)
-	print('creating a shader from spirv...')
 	if shader_spirv.compile_error_compute != null:
-		print('compile error: ', shader_spirv.compile_error_compute)
+		printerr('compute shader compile error: ', shader_spirv.compile_error_compute)
 	compute_shader = rendering_device.shader_create_from_spirv(shader_spirv)
 
-	print('creating a uniform set...')
 	if transmittance_lut == RID():
-		print('without transmittance lut...')
 		uniform_set = rendering_device.uniform_set_create(
 			[
 				output_texture_uniform,
@@ -234,7 +221,6 @@ func create_compute_shader_uniforms(
 			0 # the set ID
 		)
 	else:
-		print('with transmittance lut...')
 		var sampler_dict = make_compute_sampler_uniform(rendering_device, transmittance_lut, 2)
 		var transmittance_lut_uniform = sampler_dict["sampler_uniform"]
 		transmittance_lut_sampler = sampler_dict["sampler"]
@@ -249,23 +235,10 @@ func create_compute_shader_uniforms(
 		)
 
 	# Create a compute pipeline
-	print('creating pipeline...')
 	pipeline = rendering_device.compute_pipeline_create(compute_shader)
-	# self._render_process()
 
-	# We don't need to sync up here, Godots default barriers will do the trick.
-	# If you want the output of a compute shader to be used as input of
-	# another computer shader you'll need to add a barrier:
-	#rd.barrier(RenderingDevice.BARRIER_MASK_COMPUTE)
-
-	# texture2drd = load(self.texture_2drd_path)
-	# texture2drd = load(self.texture_2drd_path)
 	if depth > 1:
-		print('assigning a 3d output texture rd...')
 		output_texture_rd = Texture3DRD.new()
 	else:
-		print('assigning a 2d output texture rd...')
 		output_texture_rd = Texture2DRD.new()
 	set_output_texture_rd_rids()
-
-	print('done!')
