@@ -27,8 +27,8 @@ void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
 }
 
-bool depth_was_written(float distance_from_camera) {
-	return distance_from_camera < 800000.0;
+bool depth_was_written(float depth) {
+	return depth > 0.0000001;
 }
 
 void fragment() {
@@ -55,7 +55,7 @@ void fragment() {
 	vec3 ray_origin = CAMERA_POSITION_WORLD - param_planet_position;
 	float original_height = length(ray_origin);
 
-	bool wrote_depth = depth_was_written(frag_distance);
+	bool wrote_depth = depth_was_written(depth);
 	if (original_height < param_planet_radius + minimum_height) {
 		ray_origin = normalize(ray_origin) * (param_planet_radius + minimum_height + epsilon);
 	}

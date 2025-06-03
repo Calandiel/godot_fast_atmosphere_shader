@@ -72,7 +72,7 @@ func clear_rids(rendering_device: RenderingDevice) -> void:
 		rendering_device.free_rid(transmittance_lut_sampler)
 
 func read_text_file(path: String):
-	var file = FileAccess.open(path, FileAccess.READ)
+	var file = FileAccess.open("res://" + path, FileAccess.READ)
 	return file.get_as_text()
 
 # Creates and returns a RGBA_f32 texture2d/texture3e for compute shaders

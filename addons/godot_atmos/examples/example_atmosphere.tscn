@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://6t2ykdnta4y0"]
+[gd_scene load_steps=9 format=3 uid="uid://6t2ykdnta4y0"]
 
 [ext_resource type="Script" uid="uid://b4t81sd5au5xo" path="res://addons/godot_atmos/atmosphere/scripts/atmosphere_node.gd" id="1_gwbny"]
 [ext_resource type="Script" uid="uid://dscv0gvan53b1" path="res://addons/godot_atmos/examples/camera.gd" id="2_vu8o4"]
@@ -7,18 +7,14 @@
 radius = 6.37
 height = 12.74
 
-[sub_resource type="Gradient" id="Gradient_vu8o4"]
-offsets = PackedFloat32Array(0.841365, 1)
+[sub_resource type="Gradient" id="Gradient_w0l6p"]
+colors = PackedColorArray(0, 0, 0, 1, 0, 0, 0, 1)
 
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_hrv5a"]
-frequency = 1.0
-
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_w3ld3"]
-color_ramp = SubResource("Gradient_vu8o4")
-noise = SubResource("FastNoiseLite_hrv5a")
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_7ubkw"]
+gradient = SubResource("Gradient_w0l6p")
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_vu8o4"]
-panorama = SubResource("NoiseTexture2D_w3ld3")
+panorama = SubResource("GradientTexture1D_7ubkw")
 
 [sub_resource type="Sky" id="Sky_hrv5a"]
 sky_material = SubResource("PanoramaSkyMaterial_vu8o4")
@@ -39,14 +35,13 @@ mie_scale_height = 0.001
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(-0.962758, 0, -0.270365, 0, 1, 0, 0.270365, 0, -0.962758, 0.222023, 7.20399, -0.16203)
-near = 0.001
 script = ExtResource("2_vu8o4")
 
 [node name="PlanetSurface" type="MeshInstance3D" parent="."]
 mesh = SubResource("SphereMesh_gwbny")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.14151, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.9443, 0, 0)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_gwbny")
