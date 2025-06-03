@@ -23,10 +23,9 @@ void main() {
 		int(INPUT_DATA_BUFFER.target_dimensions.z),
 		int(INPUT_DATA_BUFFER.target_dimensions.w)
 	);
-	ivec4 coords = sample_2d_to_4d(uv, dim);
 
-	float mu = (float(coords.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0; // cos_of_view_zenith_angle
-	float nu = (float(coords.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * 2.0 - 1.0; // cos_of_view_sun_angle
+	float mu = (float(uv.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0; // cos_of_view_zenith_angle
+	float nu = (float(uv.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * 2.0 - 1.0; // cos_of_view_sun_angle
 	// mus and height are meant to be inputs
 	float mus = DYNAMIC_DATA_BUFFER.sun_zenith_angle; // cos_of_sun_zenith_angle
 	float height = DYNAMIC_DATA_BUFFER.camera_height;

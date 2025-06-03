@@ -76,6 +76,13 @@ var shader_loaded = false
 var cached_transform: Transform3D
 
 func _ready() -> void:
+	if camera_path == null or !has_node(camera_path):
+		printerr("Atmosphere needs a valid camera reference to render to!")
+		return
+
+	# Get the camera ASAP, we need it for LUT calculations
+	camera = get_node(camera_path) as Camera3D
+
 	cached_transform = global_transform
 
 func _exit_tree() -> void:
@@ -85,13 +92,6 @@ func _exit_tree() -> void:
 	RenderingServer.call_on_render_thread(_free_compute_resources)
 
 func load_shader():
-	if camera_path == null or !has_node(camera_path):
-		printerr("Atmosphere needs a valid camera reference to render to!")
-		return
-
-	# Get the camera ASAP, we need it for LUT calculations
-	camera = get_node(camera_path) as Camera3D
-
 	# Set variables for the shader
 	var shader = Shader.new()
 	reload_shader(shader)

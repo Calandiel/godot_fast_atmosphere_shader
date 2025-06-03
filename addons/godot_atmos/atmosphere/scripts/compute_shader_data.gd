@@ -39,6 +39,7 @@ func render_process(rendering_device: RenderingDevice, camera_height, angle, wid
 	rendering_device.compute_list_set_push_constant(compute_list, push_constant_buffer.to_byte_array(), push_constant_buffer.size() * 4)
 
 	rendering_device.compute_list_dispatch(compute_list, width, height, depth)
+	#rendering_device.compute_list_dispatch(compute_list, width, height * depth, 1)
 	rendering_device.compute_list_end()
 
 func process():

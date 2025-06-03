@@ -14,16 +14,6 @@ ivec2 sample_4d_to_2d(ivec4 coords, ivec4 dimensions) {
 }
 
 
-/// Given 2d coords and 4d dimensions, returns "virtual" 4d coords of the texture.
-ivec4 sample_2d_to_4d(ivec2 coords, ivec4 dimensions) {
-	return ivec4(
-		coords.x % dimensions.x,
-		coords.y % dimensions.y,
-		(coords.x - (coords.x % dimensions.x)) / dimensions.x,
-		(coords.y - (coords.y % dimensions.y)) / dimensions.y
-	);
-}
-
 bool intersect_sphere(
 	// Ray
 	in vec3 ray_origin,
@@ -446,8 +436,12 @@ vec3 scatter(
 		vec3 final_sky_color;
 		if(wrote_depth) {
 			// Depth was written, use the aerial perspective lut
-			float d = clamp(ray_length / (atmosphere_radius - planet_radius), 0.0, 1.0);
+			float d = clamp(ray_length / (10.0 * (atmosphere_radius - planet_radius)), 0.0, 1.0);
 			final_sky_color = texture(aerial_perspective_lut, vec3(mu * 0.5 + 0.5, nu * 0.5 + 0.5, d)).rgb * sun_intensity;
+			//if(d <= 0.005) {
+			//	final_sky_color = vec3(1.0, 1.0, 1.0);
+			//}
+			//final_sky_color = vec3(d, 0.0, 0.0);
 		} else {
 			// Depth wasn't written, use the sky view lut
 			final_sky_color = texture(sky_view_lut, vec2(mu * 0.5 + 0.5, nu * 0.5 + 0.5)).rgb * sun_intensity;

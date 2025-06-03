@@ -13,9 +13,12 @@ layout(set = 0, binding = 0, rgba32f) uniform image3D OUTPUT_TEXTURE;
 #include uniform_transmittance.glsl
 
 void main() {
-	ivec2 uv = ivec2(
+	ivec3 uv = ivec3(
 		int(gl_GlobalInvocationID.x),
-		int(gl_GlobalInvocationID.y)
+		int(gl_GlobalInvocationID.y),
+		int(gl_GlobalInvocationID.z)
+		//int(gl_GlobalInvocationID.y) % int(INPUT_DATA_BUFFER.target_dimensions.z),
+		//int(gl_GlobalInvocationID.y) / int(INPUT_DATA_BUFFER.target_dimensions.z)
 	);
 	ivec4 dim = ivec4(
 		int(INPUT_DATA_BUFFER.target_dimensions.x),
@@ -23,11 +26,10 @@ void main() {
 		int(INPUT_DATA_BUFFER.target_dimensions.z),
 		int(INPUT_DATA_BUFFER.target_dimensions.w)
 	);
-	ivec4 coords = sample_2d_to_4d(uv, dim);
 
-	float mu = (float(coords.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0; // cos_of_view_zenith_angle
-	float nu = (float(coords.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * 2.0 - 1.0; // cos_of_view_sun_angle
-	float maximum_ray_length = (float(coords.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * (INPUT_DATA_BUFFER.atmosphere_radius - INPUT_DATA_BUFFER.planet_radius);
+	float mu = (float(uv.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0; // cos_of_view_zenith_angle
+	float nu = (float(uv.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * 2.0 - 1.0; // cos_of_view_sun_angle
+	float maximum_ray_length = 10.0 * float(uv.z) / float(INPUT_DATA_BUFFER.target_dimensions.z) * (INPUT_DATA_BUFFER.atmosphere_radius - INPUT_DATA_BUFFER.planet_radius);
 	// mus and height are meant to be inputs
 	float mus = DYNAMIC_DATA_BUFFER.sun_zenith_angle; // cos_of_sun_zenith_angle
 	float height = DYNAMIC_DATA_BUFFER.camera_height;
@@ -79,8 +81,7 @@ void main() {
 	vec3 sky_color = vec3(phase_rayleigh * total_light_rayleigh); // only store rayleigh contribution - mie scattering has negligible impact for reasonable atmospheres and this way we don't need to perform more expensive operations to get rid of the light scattered by the sun when looking at it through an opaque object (like when a mountain is blocking the view)
 
 	imageStore(
-		OUTPUT_TEXTURE,
-		ivec3(gl_GlobalInvocationID.xyz),
+		OUTPUT_TEXTURE, uv,
 		vec4(sky_color, 1.0) // <-- what we want
 	);
 }

@@ -118,4 +118,10 @@ void fragment() {
 	vec3 cc = 1.0 - exp(-exposure * screen_color);
 	ALBEDO = cc;
 	ALPHA = 1.0;
+
+	if (SCREEN_UV.x < 0.33 && SCREEN_UV.y < 0.33) {
+		vec2 uv = SCREEN_UV / 0.33;
+		//ALBEDO = texture(param_sky_view_lut, uv).rgb;
+		ALBEDO = texture(param_aerial_perspective_lut, vec3(uv, 1.0)).rgb;
+	}
 }
