@@ -62,12 +62,12 @@ var transmittance_lut_width = 256 # 256
 var transmittance_lut_height = 64 # 64
 var sky_view_lut_width = 256
 var sky_view_lut_height = 100
-var aerial_perspective_lut_width = 64
+var aerial_perspective_lut_width = 32
 var aerial_perspective_lut_height = 32
-var aerial_perspective_lut_depth = 16
+var aerial_perspective_lut_depth = 32
 
 
-# Shader related variab;es
+# Shader related variables
 var rendering_device: RenderingDevice
 var transmittance_lut_compute_shader: ComputeShaderData
 var sky_view_lut_compute_shader: ComputeShaderData

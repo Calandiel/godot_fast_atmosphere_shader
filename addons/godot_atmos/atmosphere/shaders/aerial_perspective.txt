@@ -29,7 +29,7 @@ void main() {
 
 	float mu = (float(uv.x) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.x) * 2.0 - 1.0; // cos_of_view_zenith_angle
 	float nu = (float(uv.y) + 0.5) / float(INPUT_DATA_BUFFER.target_dimensions.y) * 2.0 - 1.0; // cos_of_view_sun_angle
-	float maximum_ray_length = 10.0 * float(uv.z) / float(INPUT_DATA_BUFFER.target_dimensions.z) * (INPUT_DATA_BUFFER.atmosphere_radius - INPUT_DATA_BUFFER.planet_radius);
+	float maximum_ray_length = float(uv.z) / float(INPUT_DATA_BUFFER.target_dimensions.z) * (INPUT_DATA_BUFFER.atmosphere_radius - INPUT_DATA_BUFFER.planet_radius);
 	// mus and height are meant to be inputs
 	float mus = DYNAMIC_DATA_BUFFER.sun_zenith_angle; // cos_of_sun_zenith_angle
 	float height = DYNAMIC_DATA_BUFFER.camera_height;
